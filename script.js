@@ -1,48 +1,92 @@
 document.getElementById("generarBtn").addEventListener("click", generarPlan);
+// ... (código anterior)
 
+// 🧠 Prompt base del entrenador experto, mejorado para fidedignidad y formato JSON
+const promptBase = `
+Eres un entrenador experto en running y deportes de resistencia, con gran experiencia en deportistas que son aficionados.
+
+---
+**REGLAS CRUCIALES DE ENTRENAMIENTO:**
+1.  **SEGURIDAD Y PROGRESIÓN:** Asegura una progresión gradual en el volumen total de kilómetros semanal no mayor al **10%** respecto a la semana anterior.
+2.  **ESTRUCTURA SEMANAL:** Incluye al menos una sesión de **Velocidad/Fartlek/Intervalos** y una sesión de **Fondo Largo** por semana.
+3.  **RECUPERACIÓN:** Asigna días de **descanso total** o **descanso activo** (ej: estiramiento, yoga) y recomienda una sesión de **revisión kinésica o masaje deportivo** al menos una vez cada 4 semanas, o si el atleta tiene historial de lesiones.
+4.  **PRESCRIPCIÓN:** Los entrenamientos deben ser en base a **ritmos (min/km)** (ajustados a su ritmo actual y objetivo) y **zonas de frecuencia cardiaca** (Zonas 2-5).
+
+---
+**FORMATO DE SALIDA (OBLIGATORIO):**
+Debes entregar el plan de entrenamiento para las semanas solicitadas en un **único bloque de código JSON** que contenga un array de objetos. NO INCLUYAS NINGÚN OTRO TEXTO fuera del JSON.
+
+**Estructura JSON:**
+[
+  {
+    "semana": 1,
+    "objetivo": "Adaptación de volumen",
+    "dias": [
+      {
+        "dia": "Lunes",
+        "tipo": "Descanso Total",
+        "descripcion": "Recuperación completa."
+      },
+      {
+        "dia": "Martes",
+        "tipo": "Rodaje Suave",
+        "descripcion": "Calentamiento (5min trote suave). 30 minutos a ritmo de 6:00 min/km (Zona 2). Vuelta a la calma (5min caminar y estirar)."
+      }
+      // ... más días
+    ],
+    "volumen_total_km": 15
+  }
+  // ... más semanas
+]
+`;
+
+// Función para recopilar los nuevos datos del formulario
 function generarPlan() {
   const nombre = document.getElementById("nombre").value;
   const edad = document.getElementById("edad").value;
   const experiencia = document.getElementById("experiencia").value;
   const distancia = parseInt(document.getElementById("distancia").value);
-  const ritmo = document.getElementById("ritmo").value;
+  const tiempo_objetivo = document.getElementById("tiempo_objetivo").value; // NUEVO
+  const ritmo_actual = document.getElementById("ritmo_actual").value; // NUEVO
   const dias = parseInt(document.getElementById("dias").value);
-  const duracion = document.getElementById("duracion").value;
+  // Eliminadas las variables 'duracion' y 'gps' ya que no son tan cruciales como los nuevos campos.
   const terreno = document.getElementById("terreno").value;
-  const gps = document.getElementById("gps").value;
-  const semanas = parseInt(document.getElementById("semanas").value);
+  const salud = document.getElementById("salud").value; // NUEVO
+  const lesiones = document.getElementById("lesiones").value; // NUEVO
+  const semanas = document.getElementById("semanas").value;
 
-  const sesiones = generarSesiones(experiencia, dias);
-
-  let html = `
-    <div id="planContainer">
-    <h2 class="text-success text-center">🏁 Plan de Entrenamiento para ${distancia}K</h2>
-    <p><strong>Atleta:</strong> ${nombre} (${edad} años)</p>
-    <p><strong>Nivel:</strong> ${experiencia} | <strong>Semanas:</strong> ${semanas} | <strong>Días/semana:</strong> ${dias}</p>
-    <p><strong>Ritmo:</strong> ${ritmo} | <strong>Duración máx:</strong> ${duracion} min | <strong>Terreno:</strong> ${terreno}</p>
-    <hr>
-  `;
-
-  for (let i = 1; i <= semanas; i++) {
-    html += `<h4 class="mt-4">📆 Semana ${i}</h4>
-      <table class="table table-bordered">
-      <thead><tr><th>Día</th><th>Tipo</th><th>Descripción</th></tr></thead><tbody>`;
-
-    for (let d = 0; d < dias; d++) {
-      const sesion = sesiones[(i + d) % sesiones.length];
-      html += `<tr><td>Día ${d + 1}</td><td>${sesion.tipo}</td><td>${sesion.descripcion}</td></tr>`;
-    }
-
-    html += `</tbody></table>`;
+  // Validación básica del nuevo campo
+  if (!tiempo_objetivo || !ritmo_actual) {
+    alert("Por favor, completa el Tiempo Objetivo y el Ritmo Actual.");
+    return;
   }
+  
+  // Ocultar formulario, mostrar carga
+  document.getElementById("planOutput").style.display = "block";
+  document.getElementById("planLoading").style.display = "block";
+  document.getElementById("planContent").innerHTML = "";
+  document.getElementById("downloadBtn").disabled = true;
 
-  html += `<div class="text-center">
-              <button class="btn btn-outline-success btn-download" id="pdfBtn">📄 Descargar PDF</button>
-           </div></div>`;
-
-  document.getElementById("planOutput").innerHTML = html;
-  document.getElementById("pdfBtn").addEventListener("click", () => exportarPDF(nombre));
+  const datosAtleta = {
+    nombre: nombre,
+    edad: edad,
+    experiencia: experiencia,
+    distancia_km: distancia,
+    tiempo_objetivo: tiempo_objetivo,
+    ritmo_actual_min_km: ritmo_actual,
+    dias_entrenamiento_semana: dias,
+    terreno_habitual: terreno,
+    condicion_salud: salud,
+    historial_lesiones: lesiones,
+    semanas_preparacion: semanas
+  };
+  
+  generarPlanIA(datosAtleta);
 }
+
+// ... (El resto de las funciones siguen, pero se modificará 'generarPlanIA')
+
+
 
 function generarSesiones(experiencia, dias) {
   if (experiencia === "Principiante") {
@@ -122,3 +166,140 @@ async function exportarPDF(nombre) {
   pdf.addImage(imgData, "PNG", 0, 0, width, height);
   pdf.save(`Plan_${nombre}.pdf`);
 }
+
+
+
+
+async function generarPlanIA(datosAtleta) {
+  // **IMPORTANTE:** Reemplaza 'TU_API_KEY_GEMINI' con tu clave real.
+  const GEMINI_API_KEY = 'AIzaSyBGAXQHUfoFpD0iF3UA7EqcjUhg5_C3P2Y'; 
+
+  // **SUGERENCIA:** Usar Gemini 2.5 Flash para un buen rendimiento/velocidad.
+  const GEMINI_MODEL = "gemini-2.5-flash"; 
+
+  const promptCompleto = `
+  ${promptBase}
+
+  Aquí tienes los datos del atleta:\n${JSON.stringify(datosAtleta, null, 2)}
+  `;
+
+  // Adaptación para el formato de la API de Google Gemini (similar a OpenAI)
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ text: promptCompleto }] }],
+      config: {
+        // La temperatura (aleatoriedad) baja ayuda a mantener la fidedignidad
+        temperature: 0.2, 
+      }
+    }),
+  });
+  
+  document.getElementById("planLoading").style.display = "none";
+  document.getElementById("downloadBtn").disabled = false;
+
+  if (!response.ok) {
+    // Manejo de errores de la API
+    document.getElementById("planContent").innerHTML = `
+        <div class="alert alert-danger" role="alert">
+            Error de la API: ${response.status}. Verifica tu clave de API o la configuración de cuota.
+        </div>`;
+    return;
+  }
+
+  const data = await response.json();
+  const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!rawText) {
+      document.getElementById("planContent").innerHTML = `
+        <div class="alert alert-warning" role="alert">
+            No se pudo generar el plan. Intenta con un prompt más simple o revisa el JSON de respuesta.
+        </div>`;
+      return;
+  }
+  
+  // 1. Extraer el bloque JSON del texto
+  // Busca el bloque de código JSON (lo que obliga el prompt)
+  const jsonMatch = rawText.match(/```json\s*([\s\S]*?)\s*```|\[[\s\S]*\]/);
+  
+  let planJSON;
+  if (jsonMatch) {
+      try {
+          // Intenta parsear la parte del texto que parece JSON
+          planJSON = JSON.parse(jsonMatch[1] || jsonMatch[0]);
+          mostrarPlan(planJSON); // Llama a la nueva función de visualización
+      } catch (e) {
+          console.error("Error al parsear JSON:", e);
+          document.getElementById("planContent").innerHTML = `
+              <div class="alert alert-warning" role="alert">
+                  Error de formato: La IA no entregó un JSON válido. Plan en texto plano:
+                  <pre>${rawText}</pre>
+              </div>`;
+      }
+  } else {
+       // Si no hay JSON, muestra el texto plano (plan de respaldo)
+       document.getElementById("planContent").innerHTML = `
+            <div class="alert alert-info" role="alert">
+                Plan generado en texto plano (sin formato de tabla):
+                <pre>${rawText}</pre>
+            </div>`;
+  }
+}
+
+// NUEVA función para mostrar el plan desde el JSON estructurado (más robusto)
+function mostrarPlan(planArray) {
+  let html = '<div class="accordion" id="planAccordion">';
+  
+  planArray.forEach((semana, index) => {
+    const isExpanded = index === 0 ? 'true' : 'false';
+    const showClass = index === 0 ? 'show' : '';
+    const headerId = `heading${index}`;
+    const collapseId = `collapse${index}`;
+
+    // Título de la Semana
+    html += `
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="${headerId}">
+          <button class="accordion-button club-red" type="button" data-bs-toggle="collapse" data-bs-target="#${collapseId}" aria-expanded="${isExpanded}" aria-controls="${collapseId}">
+            Semana ${semana.semana}: ${semana.objetivo} (Volumen: ${semana.volumen_total_km} km)
+          </button>
+        </h2>
+        <div id="${collapseId}" class="accordion-collapse collapse ${showClass}" aria-labelledby="${headerId}" data-bs-parent="#planAccordion">
+          <div class="accordion-body">
+            <table class="table table-striped">
+              <thead>
+                <tr>
+                  <th>Día</th>
+                  <th>Tipo de Sesión</th>
+                  <th>Descripción Detallada</th>
+                </tr>
+              </thead>
+              <tbody>`;
+
+    // Detalles de los días de entrenamiento
+    semana.dias.forEach(dia => {
+        const isRest = dia.tipo.toLowerCase().includes('descanso');
+        html += `
+          <tr class="${isRest ? 'table-secondary' : ''}">
+            <td><strong>${dia.dia}</strong></td>
+            <td>${dia.tipo}</td>
+            <td>${dia.descripcion}</td>
+          </tr>`;
+    });
+
+    html += `
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  html += '</div>'; // Fin del acordeón
+  document.getElementById("planContent").innerHTML = html;
+}
+
+// ... (El resto de funciones como 'exportarPDF' y 'generarPlan' al inicio)
