@@ -7974,6 +7974,7 @@
             const guardarCambios = () => {
                 onActualizar(integranteEditado);
                 setModoEdicion(false);
+                onCerrar();
             };
 
             return (
@@ -8220,15 +8221,49 @@
                 try {
                     const datosGuardados = localStorage.getItem('osorno_runners_data');
                     if (datosGuardados) {
-                        setDatosReales(JSON.parse(datosGuardados));
+                        const datos = JSON.parse(datosGuardados);
+                        // Inicializar estado_actual si no existe
+                        Object.keys(datos).forEach(año => {
+                            datos[año] = datos[año].map(int => {
+                                if (!int.estado_actual) {
+                                    // Inferir estado inicial basado en pagos
+                                    const pagosReales = int.pagos.filter(p => p.monto > 0);
+                                    if (pagosReales.length > 0) {
+                                        const montoPromedio = pagosReales.reduce((sum, p) => sum + p.monto, 0) / pagosReales.length;
+                                        int.estado_actual = montoPromedio <= 5000 ? 'membresía' : 'activo';
+                                    } else {
+                                        int.estado_actual = 'activo';
+                                    }
+                                }
+                                return int;
+                            });
+                        });
+                        setDatosReales(datos);
+                        guardarEnStorage(datos);
                         return;
                     }
                 } catch (e) {
                     console.error('Error al cargar datos guardados:', e);
                 }
 
-                // Si no hay datos guardados, cargar datos iniciales
-                setDatosReales(DATOS_CLUB);
+                // Si no hay datos guardados, cargar datos iniciales e inicializar estados
+                const datosIniciales = JSON.parse(JSON.stringify(DATOS_CLUB));
+                Object.keys(datosIniciales).forEach(año => {
+                    datosIniciales[año] = datosIniciales[año].map(int => {
+                        if (!int.estado_actual) {
+                            const pagosReales = int.pagos.filter(p => p.monto > 0);
+                            if (pagosReales.length > 0) {
+                                const montoPromedio = pagosReales.reduce((sum, p) => sum + p.monto, 0) / pagosReales.length;
+                                int.estado_actual = montoPromedio <= 5000 ? 'membresía' : 'activo';
+                            } else {
+                                int.estado_actual = 'activo';
+                            }
+                        }
+                        return int;
+                    });
+                });
+                setDatosReales(datosIniciales);
+                guardarEnStorage(datosIniciales);
             }, []);
 
             const datos = datosReales || DATOS_CLUB;
@@ -8333,14 +8368,14 @@
                     ? integrantes.reduce((sum, int) => sum + (int.deuda || 0), 0)
                     : integrantes.reduce((sum, int) => sum + (int.deuda_2024 || 0), 0);
 
-                // Calcular activos y membresías usando estado_actual
+                // Calcular activos y membresías SOLO usando estado_actual
                 const integrantesActivos = integrantes.filter(int => {
-                    const estado = int.estado_actual || 'activo';
+                    const estado = int.estado_actual;
                     return estado === 'activo';
                 }).length;
 
                 const integrantesMembresia = integrantes.filter(int => {
-                    const estado = int.estado_actual || 'membresía';
+                    const estado = int.estado_actual;
                     return estado === 'membresía';
                 }).length;
 
